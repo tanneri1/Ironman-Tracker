@@ -8,7 +8,7 @@ import * as dashboardPage from './pages/dashboard.js';
 import * as nutritionPage from './pages/nutrition.js';
 import * as workoutsPage from './pages/workouts.js';
 import * as planPage from './pages/plan.js';
-import * as coachPage from './pages/coach.js';
+import { initWidget as initCoachWidget } from './widgets/coach-widget.js';
 import * as profilePage from './pages/profile.js';
 
 // DOM Elements
@@ -32,7 +32,6 @@ async function init() {
     router.register('/nutrition', nutritionPage);
     router.register('/workouts', workoutsPage);
     router.register('/plan', planPage);
-    router.register('/coach', coachPage);
     router.register('/profile', profilePage);
 
     // Set up auth event listeners
@@ -83,6 +82,7 @@ function showMainView() {
     // Only trigger route on first show to avoid aborting in-flight requests
     if (!mainViewActive) {
         mainViewActive = true;
+        initCoachWidget();
         router.handleRoute();
     }
 }
