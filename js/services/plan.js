@@ -5,26 +5,47 @@ import { showToast } from '../utils.js';
 const PARSE_PLAN_URL = '/api/parse-plan';
 
 class PlanService {
-    async uploadAndParsePhoto(userId, file, planName) {
+    async uploadAndParsePhotos(userId, files, planName, startDate, onProgress) {
         try {
-            // 1. Send image to Groq vision model for parsing
-            showToast('Reading training plan...', 'info');
-            const base64 = await this.fileToBase64(file);
-            const parsedSchedule = await this.parseImage(base64, file.type);
+            // 1. Parse each image and collect all workouts
+            let allWorkouts = [];
+            for (let i = 0; i < files.length; i++) {
+                if (onProgress) onProgress(i);
+                showToast(`Reading image ${i + 1} of ${files.length}...`, 'info');
+                const base64 = await this.fileToBase64(files[i]);
+                const result = await this.parseImage(base64, files[i].type, startDate, i + 1, files.length);
+                if (result.workouts && result.workouts.length > 0) {
+                    allWorkouts = allWorkouts.concat(result.workouts);
+                }
+            }
 
-            // 2. Create training plan record
+            // 2. Sort workouts by date and deduplicate
+            allWorkouts.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+            // Build merged schedule
+            const endDate = allWorkouts.length > 0
+                ? allWorkouts[allWorkouts.length - 1].date
+                : null;
+
+            const parsedSchedule = {
+                startDate,
+                endDate,
+                workouts: allWorkouts
+            };
+
+            // 3. Create training plan record
             const plan = await trainingPlans.create({
                 user_id: userId,
                 name: planName,
                 parsed_schedule: parsedSchedule,
-                start_date: parsedSchedule.startDate,
-                end_date: parsedSchedule.endDate,
+                start_date: startDate,
+                end_date: endDate,
                 is_active: true
             });
 
-            // 4. Create planned workouts from parsed schedule
-            if (parsedSchedule.workouts && parsedSchedule.workouts.length > 0) {
-                const workoutsToCreate = parsedSchedule.workouts.map(w => ({
+            // 4. Create planned workouts
+            if (allWorkouts.length > 0) {
+                const workoutsToCreate = allWorkouts.map(w => ({
                     user_id: userId,
                     plan_id: plan.id,
                     scheduled_date: w.date,
@@ -59,12 +80,12 @@ class PlanService {
         });
     }
 
-    async parseImage(base64, mimeType) {
+    async parseImage(base64, mimeType, startDate, imageNum, totalImages) {
         try {
             const response = await fetch(PARSE_PLAN_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: base64, mimeType })
+                body: JSON.stringify({ image: base64, mimeType, startDate, imageNum, totalImages })
             });
 
             if (!response.ok) {

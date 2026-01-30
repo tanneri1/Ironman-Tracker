@@ -9,13 +9,16 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { image, mimeType } = req.body;
+        const { image, mimeType, startDate, imageNum, totalImages } = req.body;
 
         if (!image) {
             return res.status(400).json({ error: 'Base64 image is required' });
         }
 
-        const today = new Date().toISOString().split('T')[0];
+        const planStartDate = startDate || new Date().toISOString().split('T')[0];
+        const imageContext = totalImages > 1
+            ? `This is image ${imageNum} of ${totalImages} from the same training plan.`
+            : '';
 
         const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
@@ -33,9 +36,6 @@ Extract all workout information you can see and return a JSON object.
 
 Return ONLY valid JSON with this structure:
 {
-  "startDate": "YYYY-MM-DD or null",
-  "endDate": "YYYY-MM-DD or null",
-  "weeks": number or null,
   "workouts": [
     {
       "date": "YYYY-MM-DD",
@@ -50,13 +50,14 @@ Return ONLY valid JSON with this structure:
 }
 
 Guidelines:
-- Today's date is ${today}. Parse dates relative to today if only day names are given.
+- The training plan starts on ${planStartDate}. Use this as the anchor date for Week 1, Day 1.
+- If the plan shows weeks (Week 1, Week 2, etc.), calculate dates starting from ${planStartDate} as the first Monday.
+- If only day names are shown (Mon, Tue, etc.), assign dates starting from ${planStartDate}.
 - Convert all distances to kilometers (1 mile = 1.60934 km).
 - Convert all durations to minutes.
 - Identify discipline from keywords: swim/pool, bike/cycle/ride, run/jog, weights/strength/gym.
 - "Brick" means combined bike+run workout.
 - Rest days should be included with discipline "rest".
-- If you can't determine exact dates, estimate based on week structure starting from the nearest Monday.
 - Return ONLY the JSON object, no markdown fences or other text.`
                     },
                     {
@@ -64,7 +65,7 @@ Guidelines:
                         content: [
                             {
                                 type: 'text',
-                                text: 'Read this training plan image and extract all workouts into the JSON format specified.'
+                                text: `Read this training plan image and extract all workouts into the JSON format specified. The plan starts on ${planStartDate}. ${imageContext}`
                             },
                             {
                                 type: 'image_url',

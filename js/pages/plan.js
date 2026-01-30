@@ -35,22 +35,28 @@ export async function render() {
         <div id="tab-upload" class="tab-content hidden">
             <div class="card">
                 <div class="card-header">
-                    <h2 class="card-title">Upload Training Plan Photo</h2>
+                    <h2 class="card-title">Upload Training Plan Photos</h2>
                 </div>
                 <p class="text-muted mb-md">
-                    Upload a photo of your training schedule and AI will extract the workouts.
+                    Upload one or more photos of your training schedule and AI will extract the workouts.
                     Works best with printed/typed schedules.
                 </p>
                 <form id="upload-form">
-                    <div class="form-group">
-                        <label class="form-label" for="plan-name">Plan Name</label>
-                        <input type="text" id="plan-name" class="form-input" placeholder="e.g., 16-Week Ironman Plan" required>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="plan-name">Plan Name</label>
+                            <input type="text" id="plan-name" class="form-input" placeholder="e.g., 16-Week Ironman Plan" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="plan-start-date">Plan Start Date</label>
+                            <input type="date" id="plan-start-date" class="form-input" required>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="file-upload" for="plan-photo">
                             <div class="file-upload-icon">&#128247;</div>
-                            <div class="file-upload-text">Click to select photo or drag and drop</div>
-                            <input type="file" id="plan-photo" accept="image/*" required>
+                            <div class="file-upload-text">Click to select photos (you can pick multiple)</div>
+                            <input type="file" id="plan-photo" accept="image/*" multiple required>
                         </label>
                         <div id="photo-preview" class="hidden mt-md"></div>
                     </div>
@@ -166,16 +172,23 @@ function navigateWeek(delta) {
 }
 
 function handlePhotoChange(e) {
-    const file = e.target.files[0];
+    const files = e.target.files;
     const preview = document.getElementById('photo-preview');
 
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            preview.innerHTML = `<img src="${e.target.result}" style="max-width: 100%; max-height: 300px; border-radius: var(--radius-md);">`;
-            preview.classList.remove('hidden');
-        };
-        reader.readAsDataURL(file);
+    if (files.length > 0) {
+        preview.innerHTML = '';
+        preview.classList.remove('hidden');
+        Array.from(files).forEach((file, i) => {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = document.createElement('img');
+                img.src = ev.target.result;
+                img.style.cssText = 'max-width: 100%; max-height: 200px; border-radius: var(--radius-md); margin-bottom: var(--space-sm);';
+                img.alt = `Plan image ${i + 1}`;
+                preview.appendChild(img);
+            };
+            reader.readAsDataURL(file);
+        });
     } else {
         preview.classList.add('hidden');
     }
@@ -187,22 +200,27 @@ async function handlePhotoUpload(e) {
     const form = e.target;
     const submitBtn = form.querySelector('button[type="submit"]');
     const planName = document.getElementById('plan-name').value;
-    const file = document.getElementById('plan-photo').files[0];
+    const startDate = document.getElementById('plan-start-date').value;
+    const files = Array.from(document.getElementById('plan-photo').files);
 
-    if (!file) return;
+    if (files.length === 0) return;
 
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Processing...';
+    submitBtn.textContent = files.length > 1
+        ? `Processing image 1 of ${files.length}...`
+        : 'Processing...';
 
     try {
         const userId = authService.getUserId();
-        const plan = await planService.uploadAndParsePhoto(userId, file, planName);
+        const plan = await planService.uploadAndParsePhotos(userId, files, planName, startDate, (i) => {
+            submitBtn.textContent = `Processing image ${i + 1} of ${files.length}...`;
+        });
 
         // Show results
         if (plan.parsed_schedule?.workouts?.length > 0) {
             await showModal(
                 'Plan Imported',
-                `<p>Successfully extracted ${plan.parsed_schedule.workouts.length} workouts from your plan!</p>
+                `<p>Successfully extracted ${plan.parsed_schedule.workouts.length} workouts from ${files.length} image${files.length > 1 ? 's' : ''}!</p>
                  <p>Check the calendar to see your scheduled workouts.</p>`,
                 [{ id: 'ok', label: 'View Calendar', class: 'btn-primary' }]
             );
