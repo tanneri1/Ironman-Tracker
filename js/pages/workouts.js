@@ -26,6 +26,10 @@ export async function render() {
                         </select>
                     </div>
                     <div class="form-group">
+                        <label class="form-label" for="workout-date">Date</label>
+                        <input type="date" id="workout-date" name="completed_date" class="form-input" required>
+                    </div>
+                    <div class="form-group">
                         <label class="form-label" for="title">Title (optional)</label>
                         <input type="text" id="title" name="title" class="form-input" placeholder="e.g., Easy recovery run">
                     </div>
@@ -124,6 +128,9 @@ export async function render() {
 }
 
 export async function init() {
+    // Set default date to today
+    document.getElementById('workout-date').value = new Date().toISOString().split('T')[0];
+
     // Toggle discipline-specific fields
     document.getElementById('discipline').addEventListener('change', updateDisciplineFields);
     updateDisciplineFields();
@@ -154,6 +161,12 @@ async function handleWorkoutSubmit(e) {
     const submitBtn = form.querySelector('button[type="submit"]');
     const data = getFormData(form);
 
+    // Convert the date field to completed_at timestamp
+    if (data.completed_date) {
+        data.completed_at = new Date(data.completed_date + 'T12:00:00').toISOString();
+        delete data.completed_date;
+    }
+
     // Convert miles to km for storage
     if (data.distance_km) {
         data.distance_km = (parseFloat(data.distance_km) / 0.621371).toFixed(2);
@@ -166,8 +179,9 @@ async function handleWorkoutSubmit(e) {
         const userId = authService.getUserId();
         await workoutsService.logWorkout(userId, data);
 
-        // Clear form
+        // Clear form and reset date to today
         form.reset();
+        document.getElementById('workout-date').value = new Date().toISOString().split('T')[0];
         updateDisciplineFields();
 
         // Reload workouts
