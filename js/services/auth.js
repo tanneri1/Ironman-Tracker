@@ -10,8 +10,24 @@ class AuthService {
     }
 
     async init() {
-        // Set up auth state listener
+        // Check for existing session first, before setting up listener
+        // to avoid race between onAuthStateChange and getSession
+        const session = await auth.getSession();
+        if (session?.user) {
+            this.user = session.user;
+            try {
+                this.profile = await profiles.get(session.user.id);
+            } catch (error) {
+                console.error('Error fetching profile:', error);
+            }
+            this.notifyListeners();
+        }
+
+        // Set up auth state listener for future changes only
         auth.onAuthStateChange(async (event, session) => {
+            // Skip the initial session event — already handled above
+            if (event === 'INITIAL_SESSION') return;
+
             if (session?.user) {
                 this.user = session.user;
                 try {
@@ -25,17 +41,6 @@ class AuthService {
             }
             this.notifyListeners();
         });
-
-        // Check for existing session
-        const session = await auth.getSession();
-        if (session?.user) {
-            this.user = session.user;
-            try {
-                this.profile = await profiles.get(session.user.id);
-            } catch (error) {
-                console.error('Error fetching profile:', error);
-            }
-        }
 
         return this.user;
     }

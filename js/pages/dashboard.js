@@ -24,68 +24,18 @@ export async function init() {
     const content = document.getElementById('dashboard-content');
 
     try {
-        const startOfWeek = getStartOfWeek();
-        const endOfWeek = getEndOfWeek();
-        const today = new Date();
-        const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
-        const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
-
-        // Fetch data in parallel
-        const [weekWorkouts, todayMeals, plannedThisWeek] = await Promise.all([
-            workoutsService.getActualWorkouts(userId, startOfWeek.toISOString(), endOfWeek.toISOString()),
-            nutritionService.getMeals(userId, startOfDay, endOfDay),
-            workoutsService.getPlannedWorkouts(userId, startOfWeek.toISOString(), endOfWeek.toISOString())
-        ]);
-
-        const weekStats = workoutsService.getWeeklyStats(weekWorkouts);
-        const todayNutrition = nutritionService.getDailySummary(todayMeals);
-
-        content.innerHTML = `
-            ${renderEventCountdown(profile)}
-
-            <div class="stats-grid mb-md">
-                <div class="stat-card">
-                    <div class="stat-value">${weekStats.total.count}</div>
-                    <div class="stat-label">Workouts This Week</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">${workoutsService.formatDuration(weekStats.total.duration)}</div>
-                    <div class="stat-label">Training Time</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">${todayNutrition.calories}</div>
-                    <div class="stat-label">Calories Today</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">${plannedThisWeek.length}</div>
-                    <div class="stat-label">Planned Workouts</div>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <h2 class="card-title">This Week's Training</h2>
-                </div>
-                ${renderDisciplineBreakdown(weekStats)}
-            </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <h2 class="card-title">Today's Nutrition</h2>
-                    <a href="#/nutrition" class="btn btn-secondary btn-sm">Log Meal</a>
-                </div>
-                ${renderNutritionProgress(todayNutrition, profile?.daily_calorie_goal)}
-            </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <h2 class="card-title">Recent Workouts</h2>
-                    <a href="#/workouts" class="btn btn-secondary btn-sm">Log Workout</a>
-                </div>
-                ${renderRecentWorkouts(weekWorkouts.slice(0, 5))}
-            </div>
-        `;
+        await loadDashboard(content, userId, profile);
     } catch (error) {
+        // Retry once on AbortError (caused by Supabase auth token refresh)
+        if (error.name === 'AbortError') {
+            try {
+                await loadDashboard(content, userId, profile);
+                return;
+            } catch (retryError) {
+                // Fall through to error display
+                error = retryError;
+            }
+        }
         content.innerHTML = `
             <div class="empty-state">
                 <div class="empty-state-icon">&#9888;</div>
@@ -94,6 +44,70 @@ export async function init() {
             </div>
         `;
     }
+}
+
+async function loadDashboard(content, userId, profile) {
+    const startOfWeek = getStartOfWeek();
+    const endOfWeek = getEndOfWeek();
+    const today = new Date();
+    const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
+    const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
+
+    // Fetch data in parallel
+    const [weekWorkouts, todayMeals, plannedThisWeek] = await Promise.all([
+        workoutsService.getActualWorkouts(userId, startOfWeek.toISOString(), endOfWeek.toISOString()),
+        nutritionService.getMeals(userId, startOfDay, endOfDay),
+        workoutsService.getPlannedWorkouts(userId, startOfWeek.toISOString(), endOfWeek.toISOString())
+    ]);
+
+    const weekStats = workoutsService.getWeeklyStats(weekWorkouts);
+    const todayNutrition = nutritionService.getDailySummary(todayMeals);
+
+    content.innerHTML = `
+        ${renderEventCountdown(profile)}
+
+        <div class="stats-grid mb-md">
+            <div class="stat-card">
+                <div class="stat-value">${weekStats.total.count}</div>
+                <div class="stat-label">Workouts This Week</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">${workoutsService.formatDuration(weekStats.total.duration)}</div>
+                <div class="stat-label">Training Time</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">${todayNutrition.calories}</div>
+                <div class="stat-label">Calories Today</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">${plannedThisWeek.length}</div>
+                <div class="stat-label">Planned Workouts</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">This Week's Training</h2>
+            </div>
+            ${renderDisciplineBreakdown(weekStats)}
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Today's Nutrition</h2>
+                <a href="#/nutrition" class="btn btn-secondary btn-sm">Log Meal</a>
+            </div>
+            ${renderNutritionProgress(todayNutrition, profile?.daily_calorie_goal)}
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Recent Workouts</h2>
+                <a href="#/workouts" class="btn btn-secondary btn-sm">Log Workout</a>
+            </div>
+            ${renderRecentWorkouts(weekWorkouts.slice(0, 5))}
+        </div>
+    `;
 }
 
 function renderEventCountdown(profile) {
