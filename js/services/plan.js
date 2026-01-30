@@ -1,5 +1,5 @@
 // Training Plan Service - Groq Vision Parsing
-import { trainingPlans, plannedWorkouts, storage } from '../lib/supabase.js';
+import { trainingPlans, plannedWorkouts } from '../lib/supabase.js';
 import { showToast } from '../utils.js';
 
 const PARSE_PLAN_URL = '/api/parse-plan';
@@ -7,20 +7,15 @@ const PARSE_PLAN_URL = '/api/parse-plan';
 class PlanService {
     async uploadAndParsePhoto(userId, file, planName) {
         try {
-            // 1. Upload photo to Supabase Storage
-            showToast('Uploading photo...', 'info');
-            const photoUrl = await storage.uploadPlanPhoto(userId, file);
-
-            // 2. Send image to Groq vision model for parsing
+            // 1. Send image to Groq vision model for parsing
             showToast('Reading training plan...', 'info');
             const base64 = await this.fileToBase64(file);
             const parsedSchedule = await this.parseImage(base64, file.type);
 
-            // 3. Create training plan record
+            // 2. Create training plan record
             const plan = await trainingPlans.create({
                 user_id: userId,
                 name: planName,
-                photo_url: photoUrl,
                 parsed_schedule: parsedSchedule,
                 start_date: parsedSchedule.startDate,
                 end_date: parsedSchedule.endDate,
