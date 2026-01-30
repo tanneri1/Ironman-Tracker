@@ -23,6 +23,7 @@ const logoutBtn = document.getElementById('logout-btn');
 
 // Auth mode state
 let isSignUp = false;
+let mainViewActive = false;
 
 // Initialize the application
 async function init() {
@@ -43,17 +44,15 @@ async function init() {
     authService.subscribe(handleAuthStateChange);
 
     // Initialize auth service
+    // The auth state change subscriber above handles showing the correct view,
+    // so we only need to call showAuthView() if init fails entirely.
     try {
         await authService.init();
+        if (!authService.isAuthenticated()) {
+            showAuthView();
+        }
     } catch (error) {
         console.error('Auth initialization failed:', error);
-        showAuthView();
-    }
-
-    // Initial auth state check
-    if (authService.isAuthenticated()) {
-        showMainView();
-    } else {
         showAuthView();
     }
 }
@@ -70,6 +69,7 @@ function handleAuthStateChange(user, profile) {
 function showAuthView() {
     authView.classList.remove('hidden');
     mainView.classList.add('hidden');
+    mainViewActive = false;
 }
 
 function showMainView() {
@@ -80,8 +80,11 @@ function showMainView() {
     const profile = authService.getProfile();
     updateUserDisplay(user, profile);
 
-    // Trigger initial route
-    router.handleRoute();
+    // Only trigger route on first show to avoid aborting in-flight requests
+    if (!mainViewActive) {
+        mainViewActive = true;
+        router.handleRoute();
+    }
 }
 
 function updateUserDisplay(user, profile) {

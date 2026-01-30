@@ -2,11 +2,8 @@
 import { coachingSessions, actualWorkouts, meals, profiles } from '../lib/supabase.js';
 import { showToast } from '../utils.js';
 
-// AI API configuration
-// Supports OpenAI or Anthropic - set your API key and endpoint
-const AI_API_KEY = 'YOUR_AI_API_KEY';
-const AI_API_URL = 'https://api.openai.com/v1/chat/completions'; // or Anthropic endpoint
-const AI_MODEL = 'gpt-4o-mini'; // or 'claude-3-haiku-20240307'
+// AI Coach API endpoint (Vercel serverless function)
+const COACH_API_URL = '/api/coach';
 
 class CoachService {
     constructor() {
@@ -179,27 +176,22 @@ If data is missing, encourage them to log more consistently for better insights.
                 { role: 'user', content: userMessage }
             ];
 
-            // Call AI API
-            const response = await fetch(AI_API_URL, {
+            // Call coach API (Vercel serverless function)
+            const response = await fetch(COACH_API_URL, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${AI_API_KEY}`
+                    'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    model: AI_MODEL,
-                    messages: apiMessages,
-                    max_tokens: 500,
-                    temperature: 0.7
-                })
+                body: JSON.stringify({ messages: apiMessages })
             });
 
             if (!response.ok) {
-                throw new Error('AI API request failed');
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Coach API request failed');
             }
 
             const data = await response.json();
-            const assistantMessage = data.choices[0].message.content;
+            const assistantMessage = data.content;
 
             // Save messages to session
             await coachingSessions.addMessage(this.session.id, { role: 'user', content: userMessage });
