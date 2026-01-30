@@ -37,7 +37,7 @@ export async function render() {
                         <input type="number" id="duration_minutes" name="duration_minutes" class="form-input" min="1" required>
                     </div>
                     <div class="form-group">
-                        <label class="form-label" for="distance_km">Distance (km)</label>
+                        <label class="form-label" for="distance_km">Distance (mi)</label>
                         <input type="number" id="distance_km" name="distance_km" class="form-input" step="0.1" min="0">
                     </div>
                 </div>
@@ -154,6 +154,11 @@ async function handleWorkoutSubmit(e) {
     const submitBtn = form.querySelector('button[type="submit"]');
     const data = getFormData(form);
 
+    // Convert miles to km for storage
+    if (data.distance_km) {
+        data.distance_km = (parseFloat(data.distance_km) / 0.621371).toFixed(2);
+    }
+
     submitBtn.disabled = true;
     submitBtn.textContent = 'Saving...';
 
@@ -210,15 +215,15 @@ async function loadWorkouts() {
                 <div class="stat-label">Total Time</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">${stats.swim.distance.toFixed(1)} km</div>
+                <div class="stat-value">${Math.round(stats.swim.distance * 1000)}m</div>
                 <div class="stat-label">Swim Distance</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">${stats.bike.distance.toFixed(1)} km</div>
+                <div class="stat-value">${workoutsService.kmToMiles(stats.bike.distance).toFixed(1)} mi</div>
                 <div class="stat-label">Bike Distance</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">${stats.run.distance.toFixed(1)} km</div>
+                <div class="stat-value">${workoutsService.kmToMiles(stats.run.distance).toFixed(1)} mi</div>
                 <div class="stat-label">Run Distance</div>
             </div>
         `;

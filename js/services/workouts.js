@@ -124,12 +124,16 @@ class WorkoutsService {
         return `${mins}m`;
     }
 
+    kmToMiles(km) {
+        return km * 0.621371;
+    }
+
     formatDistance(km, discipline) {
         if (!km) return '-';
         if (discipline === 'swim') {
             return `${Math.round(km * 1000)}m`;
         }
-        return `${km.toFixed(1)} km`;
+        return `${this.kmToMiles(km).toFixed(1)} mi`;
     }
 
     formatPace(minutes, km, discipline) {
@@ -141,15 +145,17 @@ class WorkoutsService {
             const secs = Math.round((pace - mins) * 60);
             return `${mins}:${secs.toString().padStart(2, '0')}/100m`;
         } else if (discipline === 'bike') {
-            // km/h
-            const speed = (km / minutes) * 60;
-            return `${speed.toFixed(1)} km/h`;
+            // mph
+            const miles = this.kmToMiles(km);
+            const speed = (miles / minutes) * 60;
+            return `${speed.toFixed(1)} mph`;
         } else {
-            // min/km
-            const pace = minutes / km;
+            // min/mi
+            const miles = this.kmToMiles(km);
+            const pace = minutes / miles;
             const mins = Math.floor(pace);
             const secs = Math.round((pace - mins) * 60);
-            return `${mins}:${secs.toString().padStart(2, '0')}/km`;
+            return `${mins}:${secs.toString().padStart(2, '0')}/mi`;
         }
     }
 

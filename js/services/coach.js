@@ -108,7 +108,7 @@ If data is missing, encourage them to log more consistently for better insights.
         for (const [discipline, stats] of Object.entries(byDiscipline)) {
             summary += `- ${discipline}: ${stats.count} sessions, ${stats.duration} min total`;
             if (stats.distance > 0) {
-                summary += `, ${stats.distance.toFixed(1)} km`;
+                summary += `, ${(stats.distance * 0.621371).toFixed(1)} mi`;
             }
             summary += '\n';
         }

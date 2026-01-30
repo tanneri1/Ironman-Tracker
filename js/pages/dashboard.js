@@ -169,7 +169,7 @@ function renderDisciplineBreakdown(stats) {
                     <div class="stat-value mt-md">${stats[d].count}</div>
                     <div class="stat-label">
                         ${workoutsService.formatDuration(stats[d].duration)}
-                        ${stats[d].distance > 0 ? `<br>${stats[d].distance.toFixed(1)} km` : ''}
+                        ${stats[d].distance > 0 ? `<br>${workoutsService.formatDistance(stats[d].distance, d)}` : ''}
                     </div>
                 </div>
             `).join('')}

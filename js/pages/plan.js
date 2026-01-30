@@ -101,7 +101,7 @@ export async function render() {
                             <input type="number" id="workout-duration" name="target_duration_minutes" class="form-input" min="0">
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="workout-distance">Target Distance (km)</label>
+                            <label class="form-label" for="workout-distance">Target Distance (mi)</label>
                             <input type="number" id="workout-distance" name="target_distance_km" class="form-input" step="0.1" min="0">
                         </div>
                     </div>
@@ -246,6 +246,11 @@ async function handleManualWorkout(e) {
             if (value !== '') {
                 data[key] = value;
             }
+        }
+
+        // Convert miles to km for storage
+        if (data.target_distance_km) {
+            data.target_distance_km = (parseFloat(data.target_distance_km) / 0.621371).toFixed(2);
         }
 
         await workoutsService.createPlannedWorkout(userId, data);

@@ -156,7 +156,7 @@ async function exportWorkouts() {
         }
 
         const headers = [
-            'Date', 'Discipline', 'Title', 'Duration (min)', 'Distance (km)',
+            'Date', 'Discipline', 'Title', 'Duration (min)', 'Distance (mi)',
             'Avg HR', 'Max HR', 'Perceived Effort', 'Notes'
         ];
 
@@ -165,7 +165,7 @@ async function exportWorkouts() {
             w.discipline,
             w.title || '',
             w.duration_minutes || '',
-            w.distance_km || '',
+            w.distance_km ? (w.distance_km * 0.621371).toFixed(1) : '',
             w.avg_heart_rate || '',
             w.max_heart_rate || '',
             w.perceived_effort || '',
