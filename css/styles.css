@@ -63,6 +63,19 @@
     }
 }
 
+@keyframes titleReveal {
+    from {
+        opacity: 0;
+        transform: translateX(-12px);
+        letter-spacing: 0.12em;
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+        letter-spacing: 0.03em;
+    }
+}
+
 /* ═══════════════════════════════════════
    Reset & Base
    ═══════════════════════════════════════ */
@@ -76,6 +89,7 @@
 html {
     font-size: 16px;
     -webkit-font-smoothing: antialiased;
+    color-scheme: dark;
 }
 
 body {
@@ -89,6 +103,75 @@ body {
     color: var(--gray-800);
     line-height: 1.5;
     min-height: 100vh;
+}
+
+/* Dark-theme scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--gray-100);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--gray-400);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--gray-500);
+}
+
+/* Selection */
+::selection {
+    background: rgba(255, 94, 20, 0.3);
+    color: #FFFFFF;
+}
+
+/* Placeholder */
+::placeholder {
+    color: var(--gray-400);
+    opacity: 1;
+}
+
+/* Autofill override for dark inputs */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+select:-webkit-autofill,
+textarea:-webkit-autofill {
+    -webkit-text-fill-color: var(--gray-900);
+    -webkit-box-shadow: 0 0 0 1000px var(--gray-100) inset;
+    transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Links */
+a {
+    color: var(--primary-start);
+    transition: color var(--transition-fast);
+}
+
+a:hover {
+    color: var(--primary-end);
+}
+
+/* Focus-visible for keyboard navigation */
+:focus-visible {
+    outline: 2px solid var(--primary-start);
+    outline-offset: 2px;
+}
+
+/* Headings in JS templates (h3 used inline in profile) */
+h3 {
+    color: var(--gray-900);
+    font-weight: 700;
+}
+
+/* Horizontal rules (used inline in profile page) */
+hr {
+    border-color: var(--gray-200);
 }
 
 /* ═══════════════════════════════════════
@@ -133,6 +216,7 @@ body {
     text-transform: uppercase;
     text-decoration: none;
     color: #FFFFFF;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .logo-icon {
@@ -259,6 +343,7 @@ body {
     text-transform: uppercase;
     margin-bottom: var(--space-lg);
     color: var(--gray-900);
+    animation: titleReveal 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 
 /* ═══════════════════════════════════════
@@ -333,6 +418,21 @@ body {
     background: var(--gray-100);
     color: var(--gray-900);
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+/* Select dropdown option styling for dark theme */
+.form-select option {
+    background: var(--gray-100);
+    color: var(--gray-900);
+}
+
+/* Disabled inputs */
+.form-input:disabled,
+.form-select:disabled,
+.form-textarea:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: var(--gray-200);
 }
 
 .form-input:focus,
@@ -486,7 +586,14 @@ body {
     border: 1px solid var(--gray-200);
     border-top: 2px solid var(--primary-start);
     transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+    animation: cardSlideIn 0.4s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
+
+.stat-card:nth-child(1) { animation-delay: 0.05s; }
+.stat-card:nth-child(2) { animation-delay: 0.1s; }
+.stat-card:nth-child(3) { animation-delay: 0.15s; }
+.stat-card:nth-child(4) { animation-delay: 0.2s; }
+.stat-card:nth-child(5) { animation-delay: 0.25s; }
 
 .stat-card:hover {
     transform: translateY(-2px);
@@ -1211,9 +1318,52 @@ body {
 .text-muted { color: var(--gray-500); }
 .text-success { color: var(--success); }
 .text-error { color: var(--error); }
+.text-info { color: var(--info); }
 .mt-md { margin-top: var(--space-md); }
 .mb-md { margin-bottom: var(--space-md); }
 .flex { display: flex; }
 .flex-between { display: flex; justify-content: space-between; align-items: center; }
 .gap-sm { gap: var(--space-sm); }
 .gap-md { gap: var(--space-md); }
+
+/* ═══════════════════════════════════════
+   Inline-style Compatibility
+   ═══════════════════════════════════════ */
+
+/* Dashboard countdown cards use inline: background: var(--primary-gradient); color: white;
+   Literal "white" stays #FFF, gradient is orange-red — WCAG AA (4.6:1). */
+
+/* Profile page <hr> uses inline: border-top: 1px solid var(--gray-200)
+   Now resolves to #2A2A32, visible on #0D0D0F card surface. */
+
+/* Profile danger-zone card uses inline: border-color: var(--error)
+   Now resolves to #FF1744, renders as left accent in orange + error red. */
+.card[style*="border-color"] {
+    border-left-color: var(--error);
+}
+
+/* Bold text inside cards (nutrition summary uses <strong>) */
+strong {
+    color: var(--gray-900);
+    font-weight: 700;
+}
+
+/* Ensure SVG icons in coach bubble stay white */
+.coach-bubble svg {
+    stroke: #FFFFFF;
+}
+
+/* Coach "thinking" italic state */
+.chat-message em {
+    color: var(--gray-500);
+}
+
+/* Image previews in plan upload */
+img {
+    border-radius: var(--radius-md);
+}
+
+/* Smooth page transition */
+.tab-content {
+    animation: fadeInUp 0.3s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
