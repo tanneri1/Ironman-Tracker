@@ -5,41 +5,42 @@ import { showToast } from '../utils.js';
 const PARSE_PLAN_URL = '/api/parse-plan';
 
 class PlanService {
-    async uploadAndParsePhotos(userId, files, planName, startDate, onProgress) {
+    async uploadAndParsePhotos(userId, files, planName, raceDate, weeks, onProgress) {
         try {
-            // 1. Parse each image and collect all workouts
-            let allWorkouts = [];
+            // 1. Calculate the exact start date from race date and weeks
+            const startDate = this.calculateStartDate(raceDate, weeks);
+
+            // 2. Convert all images to base64
+            if (onProgress) onProgress('encoding');
+            showToast('Preparing images...', 'info');
+            const images = [];
             for (let i = 0; i < files.length; i++) {
-                if (onProgress) onProgress(i);
-                showToast(`Reading image ${i + 1} of ${files.length}...`, 'info');
                 const base64 = await this.fileToBase64(files[i]);
-                const result = await this.parseImage(base64, files[i].type, startDate, i + 1, files.length);
-                if (result.workouts && result.workouts.length > 0) {
-                    allWorkouts = allWorkouts.concat(result.workouts);
-                }
+                images.push({ data: base64, mimeType: files[i].type });
             }
 
-            // 2. Sort workouts by date and deduplicate
-            allWorkouts.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+            // 3. Send all images in a single API call with exact dates
+            if (onProgress) onProgress('parsing');
+            showToast('Reading training plan...', 'info');
+            const result = await this.parseImages(images, startDate, raceDate, weeks);
+            let allWorkouts = result.workouts || [];
 
-            // Build merged schedule
-            const endDate = allWorkouts.length > 0
-                ? allWorkouts[allWorkouts.length - 1].date
-                : null;
+            // 4. Sort workouts by date
+            allWorkouts.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
             const parsedSchedule = {
                 startDate,
-                endDate,
+                endDate: raceDate,
                 workouts: allWorkouts
             };
 
-            // 3. Create training plan record
+            // 4. Create training plan record
             const plan = await trainingPlans.create({
                 user_id: userId,
                 name: planName,
                 parsed_schedule: parsedSchedule,
                 start_date: startDate,
-                end_date: endDate,
+                end_date: raceDate,
                 is_active: true
             });
 
@@ -80,12 +81,24 @@ class PlanService {
         });
     }
 
-    async parseImage(base64, mimeType, startDate, imageNum, totalImages) {
+    calculateStartDate(raceDate, weeks) {
+        // Find the Monday of race week, then go back (weeks-1) more weeks
+        const race = new Date(raceDate + 'T00:00:00');
+        const raceDay = race.getDay(); // 0=Sun, 1=Mon...
+        const daysFromMonday = raceDay === 0 ? 6 : raceDay - 1;
+        const raceWeekMonday = new Date(race);
+        raceWeekMonday.setDate(race.getDate() - daysFromMonday);
+        const startMonday = new Date(raceWeekMonday);
+        startMonday.setDate(raceWeekMonday.getDate() - ((weeks - 1) * 7));
+        return startMonday.toISOString().split('T')[0];
+    }
+
+    async parseImages(images, startDate, raceDate, weeks) {
         try {
             const response = await fetch(PARSE_PLAN_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: base64, mimeType, startDate, imageNum, totalImages })
+                body: JSON.stringify({ images, startDate, raceDate, weeks })
             });
 
             if (!response.ok) {
@@ -97,7 +110,7 @@ class PlanService {
             return data.schedule;
         } catch (error) {
             console.error('Plan parsing error:', error);
-            return { startDate: null, endDate: null, workouts: [] };
+            return { workouts: [] };
         }
     }
 
@@ -168,9 +181,8 @@ class PlanService {
 
     async deletePlan(planId) {
         try {
-            // Delete associated workouts first
             await plannedWorkouts.deleteByPlan(planId);
-            // Note: We'd need to add a delete method to trainingPlans
+            await trainingPlans.delete(planId);
             showToast('Plan deleted', 'success');
         } catch (error) {
             showToast('Failed to delete plan', 'error');

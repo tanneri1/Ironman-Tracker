@@ -39,7 +39,7 @@ export async function render() {
                 </div>
                 <p class="text-muted mb-md">
                     Upload one or more photos of your training schedule and AI will extract the workouts.
-                    Works best with printed/typed schedules.
+                    Dates are calculated from your race day and plan length so training ends on race day.
                 </p>
                 <form id="upload-form">
                     <div class="form-row">
@@ -48,8 +48,12 @@ export async function render() {
                             <input type="text" id="plan-name" class="form-input" placeholder="e.g., 16-Week Ironman Plan" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="plan-start-date">Plan Start Date</label>
-                            <input type="date" id="plan-start-date" class="form-input" required>
+                            <label class="form-label" for="plan-race-date">Race/Event Date</label>
+                            <input type="date" id="plan-race-date" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="plan-weeks">Plan Length (weeks)</label>
+                            <input type="number" id="plan-weeks" class="form-input" min="1" max="52" placeholder="e.g., 20" required>
                         </div>
                     </div>
                     <div class="form-group">
@@ -200,20 +204,20 @@ async function handlePhotoUpload(e) {
     const form = e.target;
     const submitBtn = form.querySelector('button[type="submit"]');
     const planName = document.getElementById('plan-name').value;
-    const startDate = document.getElementById('plan-start-date').value;
+    const raceDate = document.getElementById('plan-race-date').value;
+    const weeks = parseInt(document.getElementById('plan-weeks').value, 10);
     const files = Array.from(document.getElementById('plan-photo').files);
 
     if (files.length === 0) return;
 
     submitBtn.disabled = true;
-    submitBtn.textContent = files.length > 1
-        ? `Processing image 1 of ${files.length}...`
-        : 'Processing...';
+    submitBtn.textContent = 'Processing...';
 
     try {
         const userId = authService.getUserId();
-        const plan = await planService.uploadAndParsePhotos(userId, files, planName, startDate, (i) => {
-            submitBtn.textContent = `Processing image ${i + 1} of ${files.length}...`;
+        const plan = await planService.uploadAndParsePhotos(userId, files, planName, raceDate, weeks, (stage) => {
+            if (stage === 'encoding') submitBtn.textContent = 'Preparing images...';
+            else if (stage === 'parsing') submitBtn.textContent = 'Reading plan...';
         });
 
         // Show results
@@ -389,9 +393,12 @@ async function loadPlans() {
                             ${plan.parsed_schedule?.workouts?.length ? `<span>${plan.parsed_schedule.workouts.length} workouts</span>` : ''}
                         </div>
                     </div>
-                    ${!plan.is_active ? `
-                        <button class="btn btn-secondary btn-sm activate-plan" data-id="${plan.id}">Activate</button>
-                    ` : ''}
+                    <div class="flex gap-sm">
+                        ${!plan.is_active ? `
+                            <button class="btn btn-secondary btn-sm activate-plan" data-id="${plan.id}">Activate</button>
+                        ` : ''}
+                        <button class="btn btn-secondary btn-sm delete-plan" data-id="${plan.id}" data-name="${escapeHtml(plan.name)}" style="color: var(--error);">Delete</button>
+                    </div>
                 </div>
             `).join('');
 
@@ -401,6 +408,28 @@ async function loadPlans() {
                     const planId = e.target.dataset.id;
                     await planService.setActivePlan(userId, planId);
                     await loadPlans();
+                });
+            });
+
+            // Add delete handlers
+            container.querySelectorAll('.delete-plan').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const planId = e.target.dataset.id;
+                    const planName = e.target.dataset.name;
+                    const result = await showModal(
+                        'Delete Plan',
+                        `<p>Are you sure you want to delete <strong>${planName}</strong>?</p>
+                         <p>This will also remove all planned workouts associated with this plan.</p>`,
+                        [
+                            { id: 'cancel', label: 'Cancel', class: 'btn-secondary' },
+                            { id: 'delete', label: 'Delete', class: 'btn-primary btn-danger' }
+                        ]
+                    );
+                    if (result === 'delete') {
+                        await planService.deletePlan(planId);
+                        await loadPlans();
+                        await loadCalendar();
+                    }
                 });
             });
         }

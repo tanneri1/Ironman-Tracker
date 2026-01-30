@@ -152,6 +152,14 @@ export const trainingPlans = {
             .single();
         if (error) throw error;
         return data;
+    },
+
+    async delete(id) {
+        const { error } = await supabase
+            .from('training_plans')
+            .delete()
+            .eq('id', id);
+        if (error) throw error;
     }
 };
 
