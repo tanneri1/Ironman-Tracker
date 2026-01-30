@@ -47,9 +47,11 @@ class NutritionService {
                 sodium_mg: (acc.sodium_mg || 0) + (item.sodium_mg || 0),
             }), {});
 
-            // Round values
+            // Round values (calories to whole number for INTEGER column)
             Object.keys(nutrition).forEach(key => {
-                nutrition[key] = Math.round(nutrition[key] * 10) / 10;
+                nutrition[key] = key === 'calories'
+                    ? Math.round(nutrition[key])
+                    : Math.round(nutrition[key] * 10) / 10;
             });
 
             // Cache the result
