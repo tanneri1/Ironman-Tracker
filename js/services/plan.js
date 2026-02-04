@@ -110,7 +110,7 @@ class PlanService {
             return data.schedule;
         } catch (error) {
             console.error('Plan parsing error:', error);
-            return { workouts: [] };
+            throw error;
         }
     }
 
@@ -175,6 +175,85 @@ class PlanService {
             return plan;
         } catch (error) {
             showToast('Failed to create plan', 'error');
+            throw error;
+        }
+    }
+
+    async importFromJson(userId, planName, raceDate, weeks, workoutsJson) {
+        try {
+            // Parse JSON if it's a string
+            let parsed;
+            if (typeof workoutsJson === 'string') {
+                try {
+                    parsed = JSON.parse(workoutsJson);
+                } catch (e) {
+                    throw new Error('Invalid JSON format. Please check the pasted text and try again.');
+                }
+            } else {
+                parsed = workoutsJson;
+            }
+
+            // Accept either { workouts: [...] } or a raw array
+            const workouts = Array.isArray(parsed) ? parsed : parsed?.workouts;
+            if (!Array.isArray(workouts) || workouts.length === 0) {
+                throw new Error('JSON must contain a "workouts" array with at least one workout.');
+            }
+
+            // Validate each workout has required fields
+            const validDisciplines = ['swim', 'bike', 'run', 'strength', 'brick', 'rest'];
+            const validIntensities = ['easy', 'moderate', 'hard', 'race', 'recovery'];
+            for (let i = 0; i < workouts.length; i++) {
+                const w = workouts[i];
+                if (!w.date || !/^\d{4}-\d{2}-\d{2}$/.test(w.date)) {
+                    throw new Error(`Workout ${i + 1}: missing or invalid "date" (expected YYYY-MM-DD).`);
+                }
+                if (!w.discipline || !validDisciplines.includes(w.discipline)) {
+                    throw new Error(`Workout ${i + 1} (${w.date}): invalid "discipline". Must be one of: ${validDisciplines.join(', ')}.`);
+                }
+                if (w.intensity && !validIntensities.includes(w.intensity)) {
+                    throw new Error(`Workout ${i + 1} (${w.date}): invalid "intensity". Must be one of: ${validIntensities.join(', ')}.`);
+                }
+            }
+
+            // Calculate start date and sort workouts
+            const startDate = this.calculateStartDate(raceDate, weeks);
+            workouts.sort((a, b) => a.date.localeCompare(b.date));
+
+            const parsedSchedule = {
+                startDate,
+                endDate: raceDate,
+                workouts
+            };
+
+            // Create training plan record
+            const plan = await trainingPlans.create({
+                user_id: userId,
+                name: planName,
+                parsed_schedule: parsedSchedule,
+                start_date: startDate,
+                end_date: raceDate,
+                is_active: true
+            });
+
+            // Create planned workouts
+            const workoutsToCreate = workouts.map(w => ({
+                user_id: userId,
+                plan_id: plan.id,
+                scheduled_date: w.date,
+                discipline: w.discipline,
+                title: w.title || null,
+                description: w.description || null,
+                target_duration_minutes: w.duration || null,
+                target_distance_km: w.distance || null,
+                target_intensity: w.intensity || null
+            }));
+
+            await plannedWorkouts.createMany(workoutsToCreate);
+
+            showToast(`Imported ${workouts.length} workouts!`, 'success');
+            return plan;
+        } catch (error) {
+            showToast('Import failed: ' + error.message, 'error');
             throw error;
         }
     }

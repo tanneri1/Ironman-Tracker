@@ -14,6 +14,7 @@ export async function render() {
             <button class="tab active" data-tab="calendar">Calendar</button>
             <button class="tab" data-tab="upload">Upload Plan</button>
             <button class="tab" data-tab="manual">Add Workout</button>
+            <button class="tab" data-tab="import">Import</button>
         </div>
 
         <div id="tab-calendar" class="tab-content">
@@ -134,6 +135,87 @@ export async function render() {
                 </form>
             </div>
         </div>
+
+        <div id="tab-import" class="tab-content hidden">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Import Formatted Plan</h2>
+                </div>
+                <p class="text-muted mb-md">
+                    Paste JSON produced by an AI (Claude, ChatGPT, etc.) from your training plan images.
+                    This bypasses image parsing entirely &mdash; you provide the structured data directly.
+                </p>
+                <form id="import-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="import-plan-name">Plan Name</label>
+                            <input type="text" id="import-plan-name" class="form-input" placeholder="e.g., 16-Week Ironman Plan" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="import-race-date">Race/Event Date</label>
+                            <input type="date" id="import-race-date" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="import-weeks">Plan Length (weeks)</label>
+                            <input type="number" id="import-weeks" class="form-input" min="1" max="52" placeholder="e.g., 20" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="import-json">Workout JSON</label>
+                        <textarea id="import-json" class="form-textarea" rows="12" placeholder='{"workouts": [{"date": "2025-01-06", "discipline": "run", ...}]}' required style="font-family: monospace; font-size: 13px;"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Import Plan</button>
+                </form>
+
+                <details class="mt-md" style="border: 1px solid var(--gray-200); border-radius: var(--radius-md); padding: var(--space-md);">
+                    <summary style="cursor: pointer; font-weight: 600;">Format Instructions &amp; AI Prompt</summary>
+                    <div class="mt-sm">
+                        <p class="text-muted mb-sm">The JSON should match this structure:</p>
+                        <pre style="background: var(--gray-100); padding: var(--space-md); border-radius: var(--radius-sm); overflow-x: auto; font-size: 12px;">{
+  "workouts": [
+    {
+      "date": "YYYY-MM-DD",
+      "discipline": "swim|bike|run|strength|brick|rest",
+      "title": "Workout title",
+      "description": "Full workout details",
+      "duration": 60,
+      "distance": 1.6,
+      "intensity": "easy|moderate|hard|race|recovery"
+    }
+  ]
+}</pre>
+                        <p class="text-muted mt-md mb-sm"><strong>Copy-paste this prompt</strong> into Claude or ChatGPT along with your training plan images:</p>
+                        <div style="position: relative;">
+                            <pre id="ai-prompt-text" style="background: var(--gray-100); padding: var(--space-md); border-radius: var(--radius-sm); overflow-x: auto; font-size: 12px; white-space: pre-wrap;">Extract every workout from this training plan image(s) into JSON. Use this exact format:
+
+{
+  "workouts": [
+    {
+      "date": "YYYY-MM-DD",
+      "discipline": "swim|bike|run|strength|brick|rest",
+      "title": "Short workout name",
+      "description": "Full workout details exactly as written",
+      "duration": 60,
+      "distance": 1.6,
+      "intensity": "easy|moderate|hard|race|recovery"
+    }
+  ]
+}
+
+Rules:
+- "date" must be YYYY-MM-DD format. Calculate actual dates based on the plan schedule.
+- "discipline" must be exactly one of: swim, bike, run, strength, brick, rest
+- "duration" is in minutes (integer). Estimate if not explicit.
+- "distance" is in kilometers (decimal). Convert from miles if needed (1 mi = 1.60934 km).
+- "intensity" must be one of: easy, moderate, hard, race, recovery
+- Include rest days with discipline "rest"
+- Return ONLY the JSON, no other text.</pre>
+                            <button type="button" id="copy-prompt-btn" class="btn btn-secondary btn-sm" style="position: absolute; top: 8px; right: 8px;">Copy</button>
+                        </div>
+                    </div>
+                </details>
+            </div>
+        </div>
     `;
 }
 
@@ -153,6 +235,17 @@ export async function init() {
     // Form submissions
     document.getElementById('upload-form').addEventListener('submit', handlePhotoUpload);
     document.getElementById('manual-workout-form').addEventListener('submit', handleManualWorkout);
+    document.getElementById('import-form').addEventListener('submit', handleJsonImport);
+
+    // Copy prompt button
+    document.getElementById('copy-prompt-btn').addEventListener('click', () => {
+        const promptText = document.getElementById('ai-prompt-text').textContent;
+        navigator.clipboard.writeText(promptText).then(() => {
+            const btn = document.getElementById('copy-prompt-btn');
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+        });
+    });
 
     // Set default date to today
     document.getElementById('workout-date').value = new Date().toISOString().split('T')[0];
@@ -244,6 +337,11 @@ async function handlePhotoUpload(e) {
         await loadCalendar();
     } catch (error) {
         console.error('Upload failed:', error);
+        await showModal(
+            'Upload Failed',
+            `<p>Could not process the training plan:</p><p style="color: var(--error);">${escapeHtml(error.message)}</p>`,
+            [{ id: 'ok', label: 'OK' }]
+        );
     } finally {
         submitBtn.disabled = false;
         submitBtn.textContent = 'Upload & Parse';
@@ -287,6 +385,53 @@ async function handleManualWorkout(e) {
     } finally {
         submitBtn.disabled = false;
         submitBtn.textContent = 'Add to Plan';
+    }
+}
+
+async function handleJsonImport(e) {
+    e.preventDefault();
+
+    const form = e.target;
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const planName = document.getElementById('import-plan-name').value.trim();
+    const raceDate = document.getElementById('import-race-date').value;
+    const weeks = parseInt(document.getElementById('import-weeks').value, 10);
+    const jsonText = document.getElementById('import-json').value.trim();
+
+    if (!jsonText) {
+        await showModal('Missing JSON', '<p>Please paste the workout JSON into the textarea.</p>', [{ id: 'ok', label: 'OK' }]);
+        return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Importing...';
+
+    try {
+        const userId = authService.getUserId();
+        const plan = await planService.importFromJson(userId, planName, raceDate, weeks, jsonText);
+
+        const count = plan.parsed_schedule?.workouts?.length || 0;
+        await showModal(
+            'Plan Imported',
+            `<p>Successfully imported <strong>${count}</strong> workouts into "${escapeHtml(planName)}".</p>
+             <p>Check the calendar to see your scheduled workouts.</p>`,
+            [{ id: 'ok', label: 'View Calendar', class: 'btn-primary' }]
+        );
+
+        form.reset();
+        await loadPlans();
+        await loadCalendar();
+        switchTab('calendar');
+    } catch (error) {
+        console.error('JSON import failed:', error);
+        await showModal(
+            'Import Failed',
+            `<p>Could not import the training plan:</p><p style="color: var(--error);">${escapeHtml(error.message)}</p>`,
+            [{ id: 'ok', label: 'OK' }]
+        );
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Import Plan';
     }
 }
 
